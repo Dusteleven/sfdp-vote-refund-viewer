@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import { getApps, initializeApp } from 'firebase/app';
+import { Connection } from '@solana/web3.js';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -24,6 +25,11 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
+
+const connection = new Connection(
+  process.env.NEXT_PUBLIC_HELIUS_RPC!,
+  'confirmed'
+);
 
 // Initialize Firebase if not already initialized
 function getFirebaseApp() {
@@ -97,31 +103,10 @@ export async function fetchEpochStatus(): Promise<EpochStatus[]> {
   return epochs;
 }
 
-// Get current epoch (highest epoch in the database) with caching
+// Get current epoch from chain
 export async function getCurrentEpoch(): Promise<number> {
-  // Return cached data if valid
-  if (currentEpochCache !== null && isCacheValid()) {
-    return currentEpochCache;
-  }
-
-  const db = getFirestoreDb();
-  const epochsRef = collection(db, 'refund_sender_metadata');
-  const epochsQuery = query(epochsRef, orderBy('__name__', 'desc'), limit(1));
-
-  const snapshot = await getDocs(epochsQuery);
-
-  if (snapshot.empty) {
-    currentEpochCache = 577; // Default starting epoch if no data
-    return 577;
-  }
-
-  const currentEpoch = Number.parseInt(snapshot.docs[0].id);
-
-  // Update cache
-  currentEpochCache = currentEpoch;
-  cacheTimestamp = Date.now();
-
-  return currentEpoch;
+  const epochInfo = await connection.getEpochInfo();
+  return epochInfo.epoch;
 }
 
 // Fetch a specific epoch's details with caching
