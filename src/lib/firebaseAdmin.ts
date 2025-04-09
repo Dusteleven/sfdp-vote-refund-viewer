@@ -5,8 +5,11 @@ import path from 'path';
 
 export function initAdmin() {
   if (!getApps().length) {
-    const serviceAccountPath = path.resolve('./serviceAccountKey.json');
-    const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+    const serviceAccountJson = Buffer.from(
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string,
+    'base64'
+    ).toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
 
     initializeApp({
       credential: cert(serviceAccount),
