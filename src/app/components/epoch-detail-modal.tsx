@@ -31,9 +31,11 @@ interface ValidatorReward {
   epoch: number;
   amount: number;
   signature: string;
-  slot: number;
+  slot?: number;
   timestamp: any;
   from: string;
+  issues?: string[];
+  reason?: string;
 }
 
 export function EpochDetailModal({
@@ -187,17 +189,42 @@ export function EpochDetailModal({
                 <p className='text-sm text-gray-500 dark:text-gray-400'>
                   Status
                 </p>
-                <p className='font-medium'>
-                  {epochData.refundSent ? (
-                    <span className='text-green-600 dark:text-green-500'>
-                      Refunds Sent
-                    </span>
-                  ) : (
-                    <span className='text-red-600 dark:text-red-500'>
-                      No Refunds
-                    </span>
-                  )}
-                </p>
+                {validatorPubkey ? (
+                  <p className='font-medium'>
+                    {epochData.refundSent &&
+                      validatorReward &&
+                      !validatorReward.reason && (
+                        <span className='text-green-600 dark:text-green-500'>
+                          Refunds Sent
+                        </span>
+                      )}
+                    {!validatorReward && (
+                      <span className='text-red-600 dark:text-red-500'>
+                        No Refunds
+                      </span>
+                    )}
+                    {epochData.refundSent &&
+                      validatorReward &&
+                      validatorReward.issues &&
+                      validatorReward.issues.length > 0 && (
+                        <span className='text-yellow-600 dark:text-yellow-400'>
+                          Not Eligible
+                        </span>
+                      )}
+                  </p>
+                ) : (
+                  <p className='font-medium'>
+                    {epochData.refundSent ? (
+                      <span className='text-green-600 dark:text-green-500'>
+                        Refunds Sent
+                      </span>
+                    ) : (
+                      <span className='text-red-600 dark:text-red-500'>
+                        No Refunds
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
 
               <div className='bg-gray-50 dark:bg-gray-800 p-3 rounded-md'>
@@ -233,12 +260,28 @@ export function EpochDetailModal({
                     </span>
                   </div>
 
-                  <div className='flex justify-between'>
-                    <span className='text-gray-500 dark:text-gray-400'>
-                      Slot
-                    </span>
-                    <span className='font-medium'>{validatorReward.slot}</span>
-                  </div>
+                  {validatorReward.slot !== undefined && (
+                    <div className='flex justify-between'>
+                      <span className='text-gray-500 dark:text-gray-400'>
+                        Slot
+                      </span>
+                      <span className='font-medium'>
+                        {validatorReward.slot}
+                      </span>
+                    </div>
+                  )}
+                  {validatorReward.issues !== undefined && (
+                    <div className='flex justify-between'>
+                      <span className='text-gray-500 dark:text-gray-400'>
+                        Not Eligible
+                      </span>
+                      <span className='font-medium'>
+                        {validatorReward.issues.length > 1
+                          ? validatorReward.issues?.join(', ')
+                          : validatorReward.issues[0]}
+                      </span>
+                    </div>
+                  )}
 
                   <div className='flex justify-between'>
                     <span className='text-gray-500 dark:text-gray-400'>
@@ -257,17 +300,18 @@ export function EpochDetailModal({
                       {formatDate(validatorReward.timestamp)}
                     </span>
                   </div>
-
-                  <div className='pt-2 border-t border-gray-200 dark:border-gray-700'>
-                    <a
-                      href={getExplorerUrl(validatorReward.signature)}
-                      target='_blank'
-                      rel='noopener noreferrer'
-                      className='flex items-center text-blue-600 hover:text-blue-800 transition-colors text-sm'>
-                      View Transaction{' '}
-                      <ExternalLink size={14} className='ml-1' />
-                    </a>
-                  </div>
+                  {validatorReward.signature.length > 0 && (
+                    <div className='pt-2 border-t border-gray-200 dark:border-gray-700'>
+                      <a
+                        href={getExplorerUrl(validatorReward.signature)}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='flex items-center text-blue-600 hover:text-blue-800 transition-colors text-sm'>
+                        View Transaction{' '}
+                        <ExternalLink size={14} className='ml-1' />
+                      </a>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className='bg-gray-50 dark:bg-gray-800 p-4 rounded-md text-center text-gray-500 dark:text-gray-400'>

@@ -13,9 +13,11 @@ interface RewardEntry {
   epoch: number;
   amount: number;
   signature: string;
-  slot: number;
+  slot?: number;
   timestamp: any;
   from: string;
+  issues?: string[];
+  reason?: string;
 }
 
 interface DisplayEpoch {
@@ -228,6 +230,10 @@ export default function ValidatorDetailPage() {
                 <span>Refund Received</span>
               </div>
               <div className='flex items-center gap-2'>
+                <div className='w-4 h-4 bg-yellow-600 rounded' />
+                <span>Not Eligible</span>
+              </div>
+              <div className='flex items-center gap-2'>
                 <div className='w-4 h-4 bg-red-600 rounded' />
                 <span>No Refund</span>
               </div>
@@ -248,8 +254,10 @@ export default function ValidatorDetailPage() {
                         aspect-square rounded-lg text-white text-center p-2 text-sm flex flex-col justify-center items-center
                         shadow-md hover:shadow-lg transition-all hover:scale-105 cursor-pointer
                         ${
-                          e.refundSent
+                          e.refundSent && e.reward && !e.reward.issues
                             ? 'bg-green-600 hover:bg-green-700'
+                            : e.refundSent && e.reward && e.reward.issues
+                            ? 'bg-yellow-600 hover:bg-yellow-700'
                             : 'bg-red-600 hover:bg-red-700'
                         }
                       `}
