@@ -27,6 +27,7 @@ export async function getCurrentEpoch(): Promise<number> {
 export async function fetchEpochStatus(): Promise<EpochStatus[]> {
   const snapshot = await getDocs(collection(db, 'refund_sender_metadata'));
   return snapshot.docs.map(doc => ({
+    // @ts-ignore
     epoch: parseInt(doc.id),
     ...(doc.data() as EpochStatus),
   }));
