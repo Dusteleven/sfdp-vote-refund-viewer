@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useFirebase } from '@/lib/context/FirebaseProvider';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
+import { ArrowLeft, Copy, Loader2, CheckCircle } from 'lucide-react';
 
 // Type for Firestore rewards
 interface RewardEntry {
@@ -23,6 +24,7 @@ interface DisplayEpoch {
 }
 
 export default function ValidatorDetailPage() {
+  const router = useRouter();
   const rawParams = useParams();
   const pubkey = Array.isArray(rawParams.pubkey)
     ? rawParams.pubkey[0]
@@ -31,6 +33,14 @@ export default function ValidatorDetailPage() {
   const [epochList, setEpochList] = useState<DisplayEpoch[]>([]);
   const [loading, setLoading] = useState(true);
   const [validatorName, setValidatorName] = useState('');
+  const [stats, setStats] = useState({
+    totalEpochs: 0,
+    refundSent: 0,
+    noRefund: 0,
+    totalAmount: 0,
+    avgAmount: 0,
+  });
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -40,6 +50,7 @@ export default function ValidatorDetailPage() {
       if (validator?.name) setValidatorName(validator.name);
 
       try {
+        setLoading(true);
         const rewardsSnap = await getDoc(doc(db, 'validator_rewards', pubkey));
         if (rewardsSnap.exists()) {
           const data = rewardsSnap.data();
@@ -62,65 +73,185 @@ export default function ValidatorDetailPage() {
             }
           }
 
+          // Calculate stats
+          const totalAmount = rewards.reduce(
+            (sum, reward) => sum + reward.amount,
+            0
+          );
+
+          setStats({
+            totalEpochs: display.length,
+            refundSent: rewards.length,
+            noRefund: display.length - rewards.length,
+            totalAmount,
+            avgAmount: rewards.length > 0 ? totalAmount / rewards.length : 0,
+          });
+
           setEpochList(display);
         }
       } catch (err) {
         console.error('Error loading validator rewards:', err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     loadData();
   }, [pubkey, validators, db, loadingValidators]);
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(
+      pubkey || 'So11111111111111111111111111111111111111112'
+    );
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatPubkey = (key: string) => {
+    if (!key) return '';
+    return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+  };
+
   return (
-    <div className='min-h-screen bg-background text-foreground p-6 max-w-6xl mx-auto'>
-      <nav className='mb-6'>
-        <Link href='/' className='text-sm text-blue-500 hover:underline'>
-          ← Back to Epoch Grid
-        </Link>
-      </nav>
+    <div className='max-w-6xl mx-auto px-4 py-8'>
+      <Link
+        href='/search'
+        className='inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 transition-colors'>
+        <ArrowLeft className='h-4 w-4 mr-1' /> Back to Search
+      </Link>
 
-      <h1 className='text-2xl font-bold mb-2'>Validator Rewards</h1>
-      <div className='text-muted-foreground text-sm mb-6'>
-        {validatorName || pubkey}
-      </div>
-
-      {loading ? (
-        <p>Loading...</p>
-      ) : epochList.length === 0 ? (
-        <p className='text-muted-foreground'>
-          No rewards found for this validator.
-        </p>
-      ) : (
-        <div className='grid grid-cols-[repeat(auto-fit,_minmax(5rem,1fr))] gap-3 sm:gap-4 md:gap-5'>
-          {epochList.map((e) => (
-            <div
-              key={e.epoch}
-              className={`
-                aspect-square rounded text-white text-center p-2 text-sm flex flex-col justify-center items-center cursor-pointer shadow-md
-                ${
-                  e.refundSent
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700'
-                }
-              `}
-              title={`Epoch ${e.epoch} ${
-                e.refundSent ? `- ${e.reward!.amount} lamports` : '- No refund'
-              }`}>
-              <div className='text-xl font-bold'>{e.epoch}</div>
-              {e.refundSent ? (
-                <div className='text-xs'>
-                  {(e.reward!.amount / 1e9).toFixed(2)} SOL
-                </div>
-              ) : (
-                <div className='text-xs'>No refund</div>
-              )}
+      <div className='bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm overflow-hidden mb-8'>
+        <div className='p-6 border-b border-gray-200 dark:border-gray-800'>
+          <h1 className='text-2xl font-bold mb-1'>Validator Details</h1>
+          <div className='flex flex-wrap items-center gap-2 text-gray-500 dark:text-gray-400'>
+            <span className='font-medium'>
+              {validatorName || 'Unnamed Validator'}
+            </span>
+            <span className='text-gray-400 dark:text-gray-500'>•</span>
+            <div className='flex items-center'>
+              <span className='font-mono text-sm'>{formatPubkey(pubkey || 'So11111111111111111111111111111111111111112')}</span>
+              <button
+                onClick={copyToClipboard}
+                className='ml-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors'
+                title='Copy full pubkey'>
+                {copied ? (
+                  <CheckCircle className='h-4 w-4 text-green-500' />
+                ) : (
+                  <Copy className='h-4 w-4' />
+                )}
+              </button>
             </div>
-          ))}
+          </div>
         </div>
-      )}
+
+        {loading ? (
+          <div className='flex items-center justify-center p-12'>
+            <Loader2 className='h-8 w-8 text-blue-600 animate-spin' />
+            <span className='ml-2 text-gray-500 dark:text-gray-400'>
+              Loading validator data...
+            </span>
+          </div>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-6'>
+              <div className='bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4'>
+                <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
+                  Total Epochs
+                </p>
+                <h3 className='text-2xl font-bold mt-1'>{stats.totalEpochs}</h3>
+              </div>
+
+              <div className='bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4'>
+                <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
+                  Refunds Received
+                </p>
+                <h3 className='text-2xl font-bold mt-1'>{stats.refundSent}</h3>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  {stats.totalEpochs > 0
+                    ? Math.round((stats.refundSent / stats.totalEpochs) * 100)
+                    : 0}
+                  % of epochs
+                </p>
+              </div>
+
+              <div className='bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4'>
+                <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
+                  Total Rewards
+                </p>
+                <h3 className='text-2xl font-bold mt-1'>
+                  {(stats.totalAmount / 1e9).toFixed(2)} SOL
+                </h3>
+              </div>
+
+              <div className='bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4'>
+                <p className='text-sm font-medium text-gray-500 dark:text-gray-400'>
+                  Avg. Reward
+                </p>
+                <h3 className='text-2xl font-bold mt-1'>
+                  {(stats.avgAmount / 1e9).toFixed(4)} SOL
+                </h3>
+                <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                  Per epoch with refund
+                </p>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className='px-6 pb-4 flex flex-wrap items-center gap-4 text-sm'>
+              <div className='flex items-center gap-2'>
+                <div className='w-4 h-4 bg-green-600 rounded' />
+                <span>Refund Received</span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <div className='w-4 h-4 bg-red-600 rounded' />
+                <span>No Refund</span>
+              </div>
+            </div>
+
+            {/* Epoch Grid */}
+            {epochList.length === 0 ? (
+              <div className='p-6 text-center text-gray-500 dark:text-gray-400'>
+                No rewards data found for this validator.
+              </div>
+            ) : (
+              <div className='p-6 pt-0'>
+                <div className='grid grid-cols-[repeat(auto-fill,_minmax(5rem,_1fr))] sm:grid-cols-[repeat(auto-fill,_minmax(6rem,_1fr))] gap-3 sm:gap-4'>
+                  {epochList.map((e) => (
+                    <div
+                      key={e.epoch}
+                      className={`
+                        aspect-square rounded-lg text-white text-center p-2 text-sm flex flex-col justify-center items-center
+                        shadow-md hover:shadow-lg transition-all hover:scale-105
+                        ${
+                          e.refundSent
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-red-600 hover:bg-red-700'
+                        }
+                      `}
+                      title={`Epoch ${e.epoch} ${
+                        e.refundSent
+                          ? `- ${e.reward!.amount} lamports`
+                          : '- No refund'
+                      }`}>
+                      <div className='text-lg font-bold'>{e.epoch}</div>
+                      {e.refundSent ? (
+                        <div className='text-xs mt-1'>
+                          {(e.reward!.amount / 1e9).toFixed(4)} SOL
+                        </div>
+                      ) : (
+                        <div className='text-xs mt-1 italic opacity-90'>
+                          No refund
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
