@@ -257,7 +257,7 @@ export default function ValidatorDetailPage() {
                           e.refundSent && e.reward && !e.reward.issues
                             ? 'bg-green-600 hover:bg-green-700'
                             : e.refundSent && e.reward && e.reward.issues
-                            ? 'bg-yellow-600 hover:bg-yellow-700'
+                            ? 'bg-yellow-500 hover:bg-yellow-600'
                             : 'bg-red-600 hover:bg-red-700'
                         }
                       `}
