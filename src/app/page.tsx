@@ -78,7 +78,7 @@ export default function HomePage() {
           const curr = display[i];
 
           if (curr.refundSent && curr.totalRefunds !== undefined) {
-            refundSentCount++;
+            if (curr.totalRefunds > 0) refundSentCount++;
 
             if (rollingWindow.length >= 10) {
               rollingWindow.shift(); // Keep last 10
@@ -100,6 +100,7 @@ export default function HomePage() {
             if(curr.totalRefunds === 0) {
               curr.isLow = false;
               curr.refundSent = false;
+              anomalyCount--;
             }
           }
         }
