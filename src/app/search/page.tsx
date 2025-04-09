@@ -23,7 +23,7 @@ export default function SearchValidatorPage() {
       threshold: 0.3,
     });
 
-    const found = fuse
+    const found: any = fuse
       .search(validatorKey)
       .slice(0, 8)
       .map((r) => r.item);
