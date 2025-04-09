@@ -3,45 +3,92 @@
 import type React from 'react';
 
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Fuse from 'fuse.js';
 import { useFirebase } from '@/lib/context/FirebaseProvider';
 import { Search, ArrowLeft, Loader2 } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function SearchValidatorPage() {
   const router = useRouter();
   const [validatorKey, setValidatorKey] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const { validators, loadingValidators } = useFirebase();
+  const { validators, loadingValidators, db } = useFirebase();
+  const [searchIndex, setSearchIndex] = useState<Fuse<any> | null>(null);
 
+  // Create search index when validators change
   useEffect(() => {
-    if (validatorKey.length < 2 || loadingValidators) {
-      setResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-
-    // Debounce search to avoid excessive re-renders
-    const timer = setTimeout(() => {
+    if (validators.length > 0) {
       const fuse = new Fuse(validators, {
         keys: ['pubkey', 'name'],
         threshold: 0.3,
       });
+      setSearchIndex(fuse);
+    }
+  }, [validators]);
 
-      const found: any = fuse
-        .search(validatorKey)
-        .slice(0, 8)
-        .map((r) => r.item);
+  // Debounced search function
+  const performSearch = useCallback(
+    async (searchTerm: string) => {
+      if (searchTerm.length < 2) {
+        setResults([]);
+        return;
+      }
 
-      setResults(found);
-      setIsSearching(false);
+      setIsSearching(true);
+
+      try {
+        // First try to search in already loaded validators
+        let found: any[] = [];
+
+        if (searchIndex) {
+          found = searchIndex
+            .search(searchTerm)
+            .slice(0, 8)
+            .map((r) => r.item);
+        }
+
+        // If the search term looks like a pubkey (long string) and we didn't find it in loaded validators,
+        // try to fetch it directly from Firestore
+        if (found.length === 0 && searchTerm.length > 30 && db) {
+          // This might be a pubkey, try to fetch it directly
+          const validatorDoc = await getDoc(doc(db, 'validators', searchTerm));
+
+          if (validatorDoc.exists()) {
+            found = [
+              {
+                pubkey: validatorDoc.id,
+                ...validatorDoc.data(),
+              },
+            ];
+          }
+        }
+
+        setResults(found);
+      } catch (error) {
+        console.error('Error searching validators:', error);
+      } finally {
+        setIsSearching(false);
+      }
+    },
+    [searchIndex, db]
+  );
+
+  // Handle search input changes with debounce
+  useEffect(() => {
+    if (validatorKey.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      performSearch(validatorKey);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [validatorKey, validators, loadingValidators]);
+  }, [validatorKey, performSearch]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +135,7 @@ export default function SearchValidatorPage() {
           </button>
         </form>
 
-        {loadingValidators && (
+        {loadingValidators && validators.length === 0 && (
           <div className='flex items-center justify-center py-8'>
             <Loader2 className='h-8 w-8 text-blue-600 animate-spin' />
             <span className='ml-2 text-gray-500 dark:text-gray-400'>
@@ -97,7 +144,7 @@ export default function SearchValidatorPage() {
           </div>
         )}
 
-        {isSearching && !loadingValidators && (
+        {isSearching && (
           <div className='flex items-center justify-center py-8'>
             <Loader2 className='h-6 w-6 text-blue-600 animate-spin' />
             <span className='ml-2 text-gray-500 dark:text-gray-400'>

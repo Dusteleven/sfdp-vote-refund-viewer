@@ -1,16 +1,25 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { initializeApp, getApps } from 'firebase/app';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+  useMemo,
+} from 'react';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getFirestore,
+  type Firestore,
   collection,
-  onSnapshot,
-  Firestore,
-  DocumentData,
   getDocs,
+  query,
+  limit,
+  orderBy,
 } from 'firebase/firestore';
 
+// Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -20,93 +29,119 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-export type Validator = {
+// Types
+interface Validator {
   pubkey: string;
-  name?: string;
-};
+  name: string;
+  sfdp2OnboardingEpoch?: number;
+  lastUpdated?: any;
+}
 
-export type RewardEntry = {
-  epoch: number;
-  amount: number;
-  signature: string;
-  slot: number;
-  timestamp: any;
-  from: string;
-};
-
-type FirebaseContextType = {
+interface FirebaseContextType {
+  app: FirebaseApp | null;
   db: Firestore | null;
   validators: Validator[];
-  validatorRewards: Record<string, RewardEntry[]>;
   loadingValidators: boolean;
-  getValidatorRewards: (pubkey: string) => Promise<RewardEntry[]>;
-};
+  refreshValidators: () => Promise<void>;
+}
 
+// Create context
 const FirebaseContext = createContext<FirebaseContextType>({
+  app: null,
   db: null,
   validators: [],
-  validatorRewards: {},
   loadingValidators: true,
-  getValidatorRewards: async () => [],
+  refreshValidators: async () => {},
 });
 
-export const useFirebase = () => useContext(FirebaseContext);
+// Number of validators to load initially
+const VALIDATORS_INITIAL_LOAD = 1100;
 
-export function FirebaseProvider({ children }: { children: React.ReactNode }) {
+// Provider component
+export function FirebaseProvider({ children }: { children: ReactNode }) {
+  const [app, setApp] = useState<FirebaseApp | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
   const [validators, setValidators] = useState<Validator[]>([]);
-  const [validatorRewards, setValidatorRewards] = useState<
-    Record<string, RewardEntry[]>
-  >({});
   const [loadingValidators, setLoadingValidators] = useState(true);
 
+  // Initialize Firebase
   useEffect(() => {
     if (!getApps().length) {
       const app = initializeApp(firebaseConfig);
-      const firestore = getFirestore(app);
-      setDb(firestore);
-
-      const unsub = onSnapshot(
-        collection(firestore, 'validators'),
-        (snapshot) => {
-          const validatorList: Validator[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return { pubkey: docSnap.id, name: data.mnName || null };
-          });
-
-          setValidators(validatorList);
-          setLoadingValidators(false);
-        }
-      );
-
-      return () => unsub();
+      setApp(app);
+      setDb(getFirestore(app));
+    } else {
+      setApp(getApps()[0]);
+      setDb(getFirestore(getApps()[0]));
     }
   }, []);
 
-  const getValidatorRewards = async (
-    pubkey: string
-  ): Promise<RewardEntry[]> => {
-    if (!db) return [];
-    if (validatorRewards[pubkey]) return validatorRewards[pubkey];
+  // Load initial validators
+  useEffect(() => {
+    if (db) {
+      loadInitialValidators();
+    }
+  }, [db]);
 
-    const rewardsSnapshot = await getDocs(
-      collection(db, 'validator_rewards', pubkey, 'rewards')
-    );
-    const rewards = rewardsSnapshot.docs.map((r) => r.data() as RewardEntry);
-    setValidatorRewards((prev) => ({ ...prev, [pubkey]: rewards }));
-    return rewards;
+  // Load initial batch of validators
+  const loadInitialValidators = async () => {
+    if (!db) return;
+
+    try {
+      setLoadingValidators(true);
+
+      const validatorsQuery = query(
+        collection(db, 'validators'),
+        orderBy('name'),
+        limit(VALIDATORS_INITIAL_LOAD)
+      );
+
+      const validatorsSnapshot = await getDocs(validatorsQuery);
+
+      const validatorsList: Validator[] = [];
+      validatorsSnapshot.forEach((doc) => {
+        validatorsList.push({
+          pubkey: doc.id,
+          ...doc.data(),
+        } as Validator);
+      });
+
+      setValidators(validatorsList);
+    } catch (error) {
+      console.error('Error loading validators:', error);
+    } finally {
+      setLoadingValidators(false);
+    }
   };
 
+  // Refresh validators (reload from the beginning)
+  const refreshValidators = async () => {
+    if (!db) return;
+
+    setValidators([]);
+    await loadInitialValidators();
+  };
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      app,
+      db,
+      validators,
+      loadingValidators,
+      refreshValidators,
+    }),
+    [app, db, validators, loadingValidators]
+  );
+
   return (
-    <FirebaseContext.Provider
-      value={{
-        db,
-        validators,
-        validatorRewards,
-        loadingValidators,
-        getValidatorRewards,
-      }}>
+    <FirebaseContext.Provider value={contextValue}>
       {children}
     </FirebaseContext.Provider>
   );
+}
+
+// Custom hook to use the Firebase context
+export function useFirebase() {
+  return useContext(FirebaseContext);
 }

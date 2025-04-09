@@ -15,6 +15,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { EpochDetailModal } from '@/app/components/epoch-detail-modal';
 
 type DisplayEpoch = {
   epoch: number;
@@ -34,6 +35,10 @@ export default function HomePage() {
     currentEpoch: 0,
   });
   const { theme, setTheme, mounted } = useTheme();
+
+  // Modal state
+  const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -91,6 +96,11 @@ export default function HomePage() {
             }
 
             rollingWindow.push(curr.totalRefunds);
+
+            if(curr.totalRefunds === 0) {
+              curr.isLow = false;
+              curr.refundSent = false;
+            }
           }
         }
 
@@ -112,6 +122,28 @@ export default function HomePage() {
 
     load();
   }, []);
+
+  // In the HomePage component, add a useEffect to reset selectedEpoch when modal closes
+  // Add this after the existing useEffect
+  useEffect(() => {
+    if (!isModalOpen) {
+      // Small delay to ensure the modal is fully closed before resetting
+      const timer = setTimeout(() => {
+        setSelectedEpoch(null);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isModalOpen]);
+
+  const handleEpochClick = (epoch: number) => {
+    setSelectedEpoch(epoch);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
 
   if (!mounted) return null; // 🛑 Prevent rendering until theme is mounted
 
@@ -272,6 +304,7 @@ export default function HomePage() {
                     text-xs sm:text-sm font-semibold
                     text-white
                     hover:scale-105 hover:shadow-lg
+                    cursor-pointer
                     ${
                       e.refundSent
                         ? e.isLow
@@ -286,7 +319,8 @@ export default function HomePage() {
                         ? 'Low Refunds'
                         : 'Refund Sent'
                       : 'No Refund'
-                  }`}>
+                  }`}
+                  onClick={() => handleEpochClick(e.epoch)}>
                   <div className='text-lg md:text-xl font-bold'>{e.epoch}</div>
                   {e.refundSent ? (
                     <div className='mt-1 leading-tight'>
@@ -300,6 +334,13 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
+
+            {/* Epoch Detail Modal */}
+            <EpochDetailModal
+              isOpen={isModalOpen}
+              onClose={closeModal}
+              epoch={selectedEpoch}
+            />
           </>
         )}
       </div>

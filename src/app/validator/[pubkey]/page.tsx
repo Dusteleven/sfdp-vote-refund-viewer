@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useFirebase } from '@/lib/context/FirebaseProvider';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, Copy, Loader2, CheckCircle } from 'lucide-react';
+import { EpochDetailModal } from '@/app/components/epoch-detail-modal';
 
 // Type for Firestore rewards
 interface RewardEntry {
@@ -24,11 +25,10 @@ interface DisplayEpoch {
 }
 
 export default function ValidatorDetailPage() {
-  const router = useRouter();
   const rawParams = useParams();
   const pubkey = Array.isArray(rawParams.pubkey)
     ? rawParams.pubkey[0]
-    : rawParams.pubkey;
+    : rawParams.pubkey || 'So11111111111111111111111111111111111111112';
   const { validators, db, loadingValidators } = useFirebase();
   const [epochList, setEpochList] = useState<DisplayEpoch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +41,10 @@ export default function ValidatorDetailPage() {
     avgAmount: 0,
   });
   const [copied, setCopied] = useState(false);
+
+  // Modal state
+  const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -99,10 +103,21 @@ export default function ValidatorDetailPage() {
     loadData();
   }, [pubkey, validators, db, loadingValidators]);
 
+  // In the ValidatorDetailPage component, add a useEffect to reset selectedEpoch when modal closes
+  // Add this after the existing useEffect that loads data
+  useEffect(() => {
+    if (!isModalOpen) {
+      // Small delay to ensure the modal is fully closed before resetting
+      const timer = setTimeout(() => {
+        setSelectedEpoch(null);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isModalOpen]);
+
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(
-      pubkey || 'So11111111111111111111111111111111111111112'
-    );
+    navigator.clipboard.writeText(pubkey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -110,6 +125,15 @@ export default function ValidatorDetailPage() {
   const formatPubkey = (key: string) => {
     if (!key) return '';
     return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+  };
+
+  const handleEpochClick = (epoch: number) => {
+    setSelectedEpoch(epoch);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
   };
 
   return (
@@ -129,7 +153,7 @@ export default function ValidatorDetailPage() {
             </span>
             <span className='text-gray-400 dark:text-gray-500'>•</span>
             <div className='flex items-center'>
-              <span className='font-mono text-sm'>{formatPubkey(pubkey || 'So11111111111111111111111111111111111111112')}</span>
+              <span className='font-mono text-sm'>{formatPubkey(pubkey)}</span>
               <button
                 onClick={copyToClipboard}
                 className='ml-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors'
@@ -222,7 +246,7 @@ export default function ValidatorDetailPage() {
                       key={e.epoch}
                       className={`
                         aspect-square rounded-lg text-white text-center p-2 text-sm flex flex-col justify-center items-center
-                        shadow-md hover:shadow-lg transition-all hover:scale-105
+                        shadow-md hover:shadow-lg transition-all hover:scale-105 cursor-pointer
                         ${
                           e.refundSent
                             ? 'bg-green-600 hover:bg-green-700'
@@ -233,7 +257,8 @@ export default function ValidatorDetailPage() {
                         e.refundSent
                           ? `- ${e.reward!.amount} lamports`
                           : '- No refund'
-                      }`}>
+                      }`}
+                      onClick={() => handleEpochClick(e.epoch)}>
                       <div className='text-lg font-bold'>{e.epoch}</div>
                       {e.refundSent ? (
                         <div className='text-xs mt-1'>
@@ -252,6 +277,14 @@ export default function ValidatorDetailPage() {
           </>
         )}
       </div>
+
+      {/* Epoch Detail Modal */}
+      <EpochDetailModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        epoch={selectedEpoch}
+        validatorPubkey={pubkey}
+      />
     </div>
   );
 }
