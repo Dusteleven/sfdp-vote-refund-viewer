@@ -67,10 +67,15 @@ export default function HomePage() {
           };
         });
 
-        // 1️⃣ First pass — basic low refund detection
-        // 🔁 Rolling average of previous 10 refund-sent epochs
+        // Parameters
+        const stableWindowSize = 30;
+        const recentWindowSize = 10;
         const thresholdPercent = 0.6;
-        const rollingWindow: number[] = [];
+        const absoluteMinimumRefunds = 500;
+
+        const stableWindow: number[] = [];
+        const recentWindow: number[] = [];
+
         let anomalyCount = 0;
         let refundSentCount = 0;
 
@@ -80,27 +85,41 @@ export default function HomePage() {
           if (curr.refundSent && curr.totalRefunds !== undefined) {
             if (curr.totalRefunds > 0) refundSentCount++;
 
-            if (rollingWindow.length >= 10) {
-              rollingWindow.shift(); // Keep last 10
-            }
+            // Maintain rolling windows
+            if (stableWindow.length >= stableWindowSize) stableWindow.shift();
+            if (recentWindow.length >= recentWindowSize) recentWindow.shift();
 
-            const avg =
-              rollingWindow.length > 0
-                ? rollingWindow.reduce((a, b) => a + b, 0) /
-                  rollingWindow.length
+            stableWindow.push(curr.totalRefunds);
+            recentWindow.push(curr.totalRefunds);
+
+            const stableAvg =
+              stableWindow.length > 0
+                ? stableWindow.reduce((a, b) => a + b, 0) / stableWindow.length
                 : undefined;
 
-            if (avg && curr.totalRefunds < avg * thresholdPercent) {
+            const recentAvg =
+              recentWindow.length > 0
+                ? recentWindow.reduce((a, b) => a + b, 0) / recentWindow.length
+                : undefined;
+
+            const dynamicThreshold =
+              Math.min(stableAvg ?? Infinity, recentAvg ?? Infinity) *
+              thresholdPercent;
+
+            if (
+              (stableAvg || recentAvg) &&
+              (curr.totalRefunds < dynamicThreshold ||
+                curr.totalRefunds < absoluteMinimumRefunds)
+            ) {
               curr.isLow = true;
               anomalyCount++;
             }
 
-            rollingWindow.push(curr.totalRefunds);
-
-            if(curr.totalRefunds === 0) {
+            if (curr.totalRefunds === 0) {
+              // Treat zero refunds as no refunds
               curr.isLow = false;
               curr.refundSent = false;
-              anomalyCount--;
+              anomalyCount--; // Undo prior increment if it was marked low
             }
           }
         }
