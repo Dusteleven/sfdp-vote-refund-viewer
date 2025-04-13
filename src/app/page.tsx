@@ -22,6 +22,7 @@ type DisplayEpoch = {
   refundSent: boolean;
   totalRefunds?: number;
   isLow?: boolean;
+  knownDropOff?: boolean;
 };
 
 export default function HomePage() {
@@ -52,9 +53,15 @@ export default function HomePage() {
         const epochMap = new Map<number, EpochStatus>();
         firestoreEpochs.forEach((e) => epochMap.set(e.epoch, e));
 
+        const firstRefundEpoch = 577;
+        const rotationInterval = 180;
+        const dropoffEpoch = firstRefundEpoch + rotationInterval; // 757
+
+        const dropoffRefunds = epochMap.get(dropoffEpoch)?.totalRefunds ?? 280;
+
         const fullEpochs = Array.from(
-          { length: currentEpoch - 577 + 1 },
-          (_, i) => 577 + i
+          { length: currentEpoch - firstRefundEpoch + 1 },
+          (_, i) => firstRefundEpoch + i
         );
 
         const display = fullEpochs.map((epoch) => {
@@ -64,10 +71,10 @@ export default function HomePage() {
             refundSent: !!data,
             totalRefunds: data?.totalRefunds,
             isLow: false,
+            knownDropOff: epoch === dropoffEpoch,
           };
         });
 
-        // Parameters
         const stableWindowSize = 30;
         const recentWindowSize = 10;
         const thresholdPercent = 0.6;
@@ -85,41 +92,60 @@ export default function HomePage() {
           if (curr.refundSent && curr.totalRefunds !== undefined) {
             if (curr.totalRefunds > 0) refundSentCount++;
 
-            // Maintain rolling windows
-            if (stableWindow.length >= stableWindowSize) stableWindow.shift();
-            if (recentWindow.length >= recentWindowSize) recentWindow.shift();
+            if (curr.epoch < dropoffEpoch) {
+              // Pre-757 logic: Rolling windows with (epoch - 180) subtraction
+              if (stableWindow.length >= stableWindowSize) stableWindow.shift();
+              if (recentWindow.length >= recentWindowSize) recentWindow.shift();
 
-            stableWindow.push(curr.totalRefunds);
-            recentWindow.push(curr.totalRefunds);
+              let adjustedRefunds = curr.totalRefunds;
 
-            const stableAvg =
-              stableWindow.length > 0
-                ? stableWindow.reduce((a, b) => a + b, 0) / stableWindow.length
-                : undefined;
+              const offsetEpoch = curr.epoch - rotationInterval;
+              const offsetData = epochMap.get(offsetEpoch);
+              if (offsetData?.totalRefunds) {
+                adjustedRefunds -= offsetData.totalRefunds;
+                adjustedRefunds = Math.max(adjustedRefunds, 0);
+              }
 
-            const recentAvg =
-              recentWindow.length > 0
-                ? recentWindow.reduce((a, b) => a + b, 0) / recentWindow.length
-                : undefined;
+              stableWindow.push(adjustedRefunds);
+              recentWindow.push(adjustedRefunds);
 
-            const dynamicThreshold =
-              Math.min(stableAvg ?? Infinity, recentAvg ?? Infinity) *
-              thresholdPercent;
+              const stableAvg =
+                stableWindow.length > 0
+                  ? stableWindow.reduce((a, b) => a + b, 0) / stableWindow.length
+                  : undefined;
 
-            if (
-              (stableAvg || recentAvg) &&
-              (curr.totalRefunds < dynamicThreshold ||
-                curr.totalRefunds < absoluteMinimumRefunds)
-            ) {
-              curr.isLow = true;
-              anomalyCount++;
+              const recentAvg =
+                recentWindow.length > 0
+                  ? recentWindow.reduce((a, b) => a + b, 0) / recentWindow.length
+                  : undefined;
+
+              const dynamicThreshold =
+                Math.min(stableAvg ?? Infinity, recentAvg ?? Infinity) *
+                thresholdPercent;
+
+              if (
+                (stableAvg || recentAvg) &&
+                (adjustedRefunds < dynamicThreshold ||
+                  adjustedRefunds < absoluteMinimumRefunds)
+              ) {
+                curr.isLow = true;
+                anomalyCount++;
+              }
+            } else {
+              // Post-757 logic: Compare to dropoffRefunds directly
+              const lower10 = dropoffRefunds * 0.9;
+              const lower50 = dropoffRefunds * 0.5;
+
+              if (curr.totalRefunds < lower50) {
+                curr.isLow = true;
+                anomalyCount++;
+              }
             }
 
             if (curr.totalRefunds === 0) {
-              // Treat zero refunds as no refunds
               curr.isLow = false;
               curr.refundSent = false;
-              anomalyCount--; // Undo prior increment if it was marked low
+              anomalyCount--;
             }
           }
         }
@@ -296,6 +322,10 @@ export default function HomePage() {
                   <div className='w-4 h-4 bg-red-600 rounded' />
                   <span>No Refund</span>
                 </div>
+                <div className='flex items-center gap-2'>
+                  <div className='w-4 h-4 bg-blue-600 rounded' />
+                  <span>180th Epoch</span>
+                </div>{' '}
               </div>
 
               <Link
@@ -326,7 +356,9 @@ export default function HomePage() {
                     hover:scale-105 hover:shadow-lg
                     cursor-pointer
                     ${
-                      e.refundSent
+                      e.knownDropOff
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : e.refundSent
                         ? e.isLow
                           ? 'bg-yellow-500 hover:bg-yellow-600'
                           : 'bg-green-600 hover:bg-green-700'
@@ -334,7 +366,9 @@ export default function HomePage() {
                     }
                   `}
                   title={`Epoch ${e.epoch} — ${
-                    e.refundSent
+                    e.knownDropOff
+                      ? 'Known refund dropoff after 180 epochs'
+                      : e.refundSent
                       ? e.isLow
                         ? 'Low Refunds'
                         : 'Refund Sent'
