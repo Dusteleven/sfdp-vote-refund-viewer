@@ -18,6 +18,7 @@ interface RewardEntry {
   from: string;
   issues?: string[];
   reason?: string;
+  endOfBenefit?: boolean;
 }
 
 interface DisplayEpoch {
@@ -85,9 +86,13 @@ export default function ValidatorDetailPage() {
             0
           );
 
+          const skippedEpochs = rewards.filter(
+            (reward) => reward.issues && reward.issues[0] !== 'NO_DATA'
+          ).length;
+
           setStats({
             totalEpochs: display.length,
-            refundSent: rewards.length,
+            refundSent: rewards.length - skippedEpochs,
             noRefund: display.length - rewards.length,
             totalAmount,
             avgAmount: rewards.length > 0 ? totalAmount / rewards.length : 0,
@@ -237,6 +242,10 @@ export default function ValidatorDetailPage() {
                 <div className='w-4 h-4 bg-red-600 rounded' />
                 <span>No Refund</span>
               </div>
+              <div className='flex items-center gap-2'>
+                <div className='w-4 h-4 bg-blue-600 rounded' />
+                <span>180th Epoch</span>
+              </div>
             </div>
 
             {/* Epoch Grid */}
@@ -254,12 +263,18 @@ export default function ValidatorDetailPage() {
                         aspect-square rounded-lg text-white text-center p-2 text-sm flex flex-col justify-center items-center
                         shadow-md hover:shadow-lg transition-all hover:scale-105 cursor-pointer
                         ${
-                          e.refundSent && e.reward && !e.reward.issues
+                          e.reward?.endOfBenefit
+                            ? 'bg-blue-600 hover:bg-blue-700'
+                            : e.refundSent && e.reward && !e.reward.issues
                             ? 'bg-green-600 hover:bg-green-700'
-                            : e.refundSent && e.reward && e.reward.issues
-                            ? 'bg-yellow-500 hover:bg-yellow-600'
+                            : e.refundSent &&
+                              e.reward &&
+                              e.reward.issues &&
+                              e.reward.issues[0] !== 'NO_DATA'
+                            ? 'bg-yellow-600 hover:bg-yellow-700'
                             : 'bg-red-600 hover:bg-red-700'
                         }
+
                       `}
                       title={`Epoch ${e.epoch} ${
                         e.refundSent

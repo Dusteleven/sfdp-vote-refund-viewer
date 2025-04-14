@@ -198,15 +198,27 @@ export function EpochDetailModal({
                           Refunds Sent
                         </span>
                       )}
-                    {!validatorReward && (
-                      <span className='text-red-600 dark:text-red-500'>
-                        No Refunds
-                      </span>
-                    )}
+                    {!validatorReward ||
+                      (validatorReward.issues &&
+                        validatorReward.issues[0] === 'NO_DATA' &&
+                        !epochData.refundSent && (
+                          <span className='text-red-600 dark:text-red-500'>
+                            No Refunds
+                          </span>
+                        ))}
+                    {!validatorReward ||
+                      (validatorReward.issues &&
+                        validatorReward.issues[0] === 'NO_DATA' &&
+                        epochData.refundSent && (
+                          <span className='text-red-600 dark:text-red-500'>
+                            Missed or Missing
+                          </span>
+                        ))}
                     {epochData.refundSent &&
                       validatorReward &&
                       validatorReward.issues &&
-                      validatorReward.issues.length > 0 && (
+                      validatorReward.issues.length > 0 &&
+                      validatorReward.issues[0] !== 'NO_DATA' && (
                         <span className='text-yellow-600 dark:text-yellow-400'>
                           Not Eligible
                         </span>
@@ -249,7 +261,7 @@ export function EpochDetailModal({
           {validatorPubkey && (
             <div>
               <h3 className='text-lg font-medium mb-3'>Validator Reward</h3>
-              {validatorReward ? (
+              {validatorReward && epochData.totalRefunds > 0 ? (
                 <div className='space-y-3 bg-gray-50 dark:bg-gray-800 p-4 rounded-md'>
                   <div className='flex justify-between'>
                     <span className='text-gray-500 dark:text-gray-400'>
@@ -270,18 +282,19 @@ export function EpochDetailModal({
                       </span>
                     </div>
                   )}
-                  {validatorReward.issues !== undefined && (
-                    <div className='flex justify-between'>
-                      <span className='text-gray-500 dark:text-gray-400'>
-                        Not Eligible
-                      </span>
-                      <span className='font-medium'>
-                        {validatorReward.issues.length > 1
-                          ? validatorReward.issues?.join(', ')
-                          : validatorReward.issues[0]}
-                      </span>
-                    </div>
-                  )}
+                  {validatorReward.issues !== undefined &&
+                    validatorReward.issues[0] !== 'NO_DATA' && (
+                      <div className='flex justify-between'>
+                        <span className='text-gray-500 dark:text-gray-400'>
+                          Not Eligible
+                        </span>
+                        <span className='font-medium'>
+                          {validatorReward.issues.length > 1
+                            ? validatorReward.issues?.join(', ')
+                            : validatorReward.issues[0]}
+                        </span>
+                      </div>
+                    )}
 
                   <div className='flex justify-between'>
                     <span className='text-gray-500 dark:text-gray-400'>
