@@ -283,6 +283,7 @@ export function EpochDetailModal({
                     </div>
                   )}
                   {validatorReward.issues !== undefined &&
+                  validatorReward.issues.length > 0 &&
                     validatorReward.issues[0] !== 'NO_DATA' && (
                       <div className='flex justify-between'>
                         <span className='text-gray-500 dark:text-gray-400'>
