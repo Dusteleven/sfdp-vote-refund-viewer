@@ -265,13 +265,14 @@ export default function ValidatorDetailPage() {
                         ${
                           e.reward?.endOfBenefit
                             ? 'bg-blue-600 hover:bg-blue-700'
-                            : e.refundSent && e.reward &&( !e.reward.issues || (e.reward.issues && e.reward.issues.length === 0))
+                            : e.refundSent && e.reward && ( !e.reward.reason || (e.reward.issues && e.reward.issues.length === 0))
                             ? 'bg-green-600 hover:bg-green-700'
                             : e.refundSent &&
                               e.reward &&
                               e.reward.issues &&
                               e.reward.issues.length > 0 &&
-                              e.reward.issues[0] !== 'NO_DATA'
+                              e.reward.issues[0] !== 'NO_DATA' &&
+                              e.reward.amount <= 0
                             ? 'bg-yellow-600 hover:bg-yellow-700'
                             : 'bg-red-600 hover:bg-red-700'
                         }

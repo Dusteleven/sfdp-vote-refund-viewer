@@ -209,7 +209,8 @@ export function EpochDetailModal({
                     {!validatorReward ||
                       (validatorReward.issues &&
                         validatorReward.issues[0] === 'NO_DATA' &&
-                        epochData.refundSent && (
+                        epochData.refundSent &&
+                        validatorReward.amount <= 0 && (
                           <span className='text-red-600 dark:text-red-500'>
                             Missed or Missing
                           </span>
